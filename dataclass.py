@@ -325,17 +325,42 @@ class Rx(pd.DataFrame):
 
     def plot_barh(self, groupby):
         df = self.get_dup_cbns_groupby(groupby=groupby, len_set=1)
-        df.rename(index={'':'无相关适应症'},inplace=True)
+        df.rename(index={"": "无相关适应症"}, inplace=True)
         labels = self.labels.copy()
         labels.append("无相关适应症")
-        df = df.reindex(labels)
-        formats =  ["{:.0%}"] * df.shape[1]
-        plot_grid_barh(df=df, savefile="%s%s适应症贡献占比.png" % (self.savepath, groupby), formats=formats)
+        df = df.reindex(labels).fillna(0)
+        formats = ["{:.0%}"] * df.shape[1]
+        plot_grid_barh(
+            df=df,
+            savefile="%s%s适应症贡献占比.png" % (self.savepath, groupby),
+            formats=formats,
+        )
 
         df = self.get_dup_cbns_groupby(groupby=groupby, len_set=2, labels_in="高血压")
-        plot_grid_barh(df=df, savefile="%s%s高血压合并贡献占比.png" % (self.savepath, groupby), formats=formats)
+        df_undup_htn = self.get_undup_cbns_groupby(
+            groupby=groupby, len_set=1, labels_in="高血压"
+        )
+        df_undup_htn.rename(index={"高血压": "单纯高血压"}, inplace=True)
+        df = pd.concat([df_undup_htn, df], axis=0)
+        labels = [
+            "单纯高血压",
+            "高血压+冠心病",
+            "高血压+血脂异常",
+            "高血压+糖尿病",
+            "高血压+慢性肾病",
+            "高血压+卒中",
+            "高血压+高尿酸",
+            "高血压+心力衰竭",
+        ]
+        df = df.reindex(labels).fillna(0)
 
-        
+        plot_grid_barh(
+            df=df,
+            savefile="%s%s高血压合并贡献占比.png" % (self.savepath, groupby),
+            formats=formats,
+        )
+
+
 if __name__ == "__main__":
     import pandas as pd
     import numpy as np
@@ -347,4 +372,4 @@ if __name__ == "__main__":
     r = Rx(df, name="门诊标准片数")
     filter = {"关注科室": ["心内科"]}
     # print(r.get_ss_venn(("高血压", "冠心病")))
-    r.plot_barh_dup_cbns("关注科室")
+    r.plot_barh("关注科室")
