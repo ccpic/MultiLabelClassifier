@@ -1,3 +1,9 @@
 {
-    "python.pythonPath": "c:\\Users\\chencheng\\PycharmProjects\\MultiLabelClassifier\\venv37\\Scripts\\python.exe"
+    "python.pythonPath": "c:\\Users\\chencheng\\PycharmProjects\\MultiLabelClassifier\\venv37\\Scripts\\python.exe",
+    "cSpell.ignoreWords": [
+        "cbns",
+        "df",
+        "groupby",
+        "len"
+    ]
 }

@@ -11,5 +11,6 @@ data.xlsx
 labeled_data_v2.csv
 combinations.csv
 allss.csv
-~$RAAS平片处方适应症分析.pptx
-RAAS平片处方适应症分析.pptx
+*.pptx
+*.xlsx
+*.csv
