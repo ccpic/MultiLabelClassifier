@@ -14,10 +14,10 @@ mpl.rcParams["font.sans-serif"] = ["SimHei"]  # 用黑体显示中文
 mpl.rcParams["axes.unicode_minus"] = False  # 正常显示负号
 
 D_SORTER = {
-    "关注科室": ["心内科", "老干科", "普内科", "肾内科", "神内科", "内分泌科", "其他"],
+    "关注科室": ["心内科", "老干科", "普内科", "肾内科", "神内科", "内分泌科", "其他",],
     "通用名": ["缬沙坦", "厄贝沙坦", "氯沙坦", "替米沙坦", "坎地沙坦", "奥美沙坦酯", "阿利沙坦酯", "培哚普利", "贝那普利",],
-    "商品名": ["代文", "安博维", "科素亚", "美卡素", "必洛斯", "傲坦", "信立坦", "雅施达", "洛汀新"],
-    "来源": ["门诊", "病房"],
+    "商品名": ["代文", "安博维", "科素亚", "美卡素", "必洛斯", "傲坦", "信立坦", "雅施达", "洛汀新",],
+    "来源": ["门诊", "病房",],
 }
 
 
@@ -25,17 +25,12 @@ def all_subsets(ss):
     return list(chain(*map(lambda x: combinations(ss, x), range(1, len(ss) + 1))))
 
 
-def refine(df, len_set=None, labels_in=None, change_index=False):
+def refine(df, len_set=None, labels_in=None):
     if len_set is not None:  # 返回指定标签数量的结果
-        # if type(df.index) == tuple:
-        #     df = df[df.index.map(len) == len_set]
         df = df[df.index.map(lambda x: x.count("+")) == len_set - 1]
 
     if labels_in is not None:  # 返回含有指定标签的结果
         df = df[df.index.map(lambda x: "高血压" in x) == True]
-
-    if change_index is True:  # 行标签由tuple改为+号相连的字符串
-        df.index = df.index.map(lambda x: "+".join(x) if type(x) is tuple else x)
 
     if "占比" in df.columns:
         df.sort_values(by="占比", ascending=False, inplace=True)
@@ -47,30 +42,30 @@ def refine(df, len_set=None, labels_in=None, change_index=False):
     return df
 
 
-def get_undup_cbns(df, labels):
+def get_intersect(df, labels):
     total_number = df["统计值"].sum()
-    df_undup_cbns = df.loc[:, labels].apply(
+    df_intersect = df.loc[:, labels].apply(
         lambda s: [s.name if v == 1 else np.nan for v in s]
     )
-    df_undup_cbns = df_undup_cbns.T.apply(lambda x: "+".join(x.dropna().tolist()))
-    df_undup_cbns = pd.concat([df_undup_cbns, df["统计值"]], axis=1)
-    df_undup_cbns.columns = ["高血压合并症", "统计值"]
-    df_undup_cbns = df_undup_cbns.groupby(["高血压合并症"]).sum()
-    df_undup_cbns["占比"] = df_undup_cbns["统计值"] / total_number
+    df_intersect = df_intersect.T.apply(lambda x: "+".join(x.dropna().tolist()))
+    df_intersect = pd.concat([df_intersect, df["统计值"]], axis=1)
+    df_intersect.columns = ["高血压合并症", "统计值"]
+    df_intersect = df_intersect.groupby(["高血压合并症"]).sum()
+    df_intersect["占比"] = df_intersect["统计值"] / total_number
 
-    return df_undup_cbns
+    return df_intersect
 
 
-def get_dup_cbns(df):
+def get_union(df):
     df.reset_index(inplace=True)
     df["高血压合并症"] = df["高血压合并症"].apply(lambda x: all_subsets(tuple(x.split("+"))))
 
-    df_dup_cbns = df.explode("高血压合并症").groupby("高血压合并症").sum()
-    df_dup_cbns.index = df_dup_cbns.index.map(
+    df_union = df.explode("高血压合并症").groupby("高血压合并症").sum()
+    df_union.index = df_union.index.map(
         lambda x: "+".join(x) if type(x) is tuple else x
     )
 
-    return df_dup_cbns
+    return df_union
 
 
 class Rx(pd.DataFrame):
@@ -107,141 +102,119 @@ class Rx(pd.DataFrame):
         self.savepath = savepath
         self.labels = labels
 
-    def get_undup_cbns(
-        self, change_index=False, len_set=None, labels_in=None
+    def get_intersect(
+        self, groupby=None, len_set=None, labels_in=None
     ):  # 获得指定条件的所有标签组合（互不相交，加和=100%）
-        df_undup_cbns = get_undup_cbns(self, self.labels)
-        df_undup_cbns = refine(
-            df=df_undup_cbns,
-            len_set=len_set,
-            labels_in=labels_in,
-            change_index=change_index,
-        )
+        if groupby is None:
+            df_intersect = get_intersect(self, self.labels)
+            df_intersect = refine(df=df_intersect, len_set=len_set, labels_in=labels_in,)
+            
+            return df_intersect
+        else:
+            cols = self[groupby].unique()
 
-        return df_undup_cbns
+            for i, col in enumerate(cols):
+                df_intersect = get_intersect(self[self[groupby] == col], self.labels)["占比"]
+                if i == 0:
+                    df_intersect_groupby = df_intersect
+                else:
+                    df_intersect_groupby = pd.concat(
+                        [df_intersect_groupby, df_intersect], axis=1
+                    )
+            df_intersect_groupby.columns = cols
 
-    def get_undup_cbns_groupby(
-        self, groupby, len_set=None, labels_in=None
-    ):  # 获得指定条件的所有标签组合的分组矩阵
-        cols = self[groupby].unique()
+            if groupby in D_SORTER:
+                try:
+                    df_intersect_groupby = df_intersect_groupby[
+                        D_SORTER[groupby]
+                    ]  # 对于部分变量有固定列排序
+                except KeyError:
+                    pass
 
-        for i, col in enumerate(cols):
-            df_undup_cbns = get_undup_cbns(self[self[groupby] == col], self.labels)[
-                "占比"
-            ]
-            if i == 0:
-                df_undup_cbns_groupby = df_undup_cbns
-            else:
-                df_undup_cbns_groupby = pd.concat(
-                    [df_undup_cbns_groupby, df_undup_cbns], axis=1
-                )
-        df_undup_cbns_groupby.columns = cols
+            df_intersect_groupby = refine(
+                df=df_intersect_groupby, len_set=len_set, labels_in=labels_in
+            )
 
-        if groupby in D_SORTER:
-            try:
-                df_undup_cbns_groupby = df_undup_cbns_groupby[
-                    D_SORTER[groupby]
-                ]  # 对于部分变量有固定列排序
-            except KeyError:
-                pass
+            return df_intersect_groupby
 
-        df_undup_cbns_groupby = refine(
-            df=df_undup_cbns_groupby, len_set=len_set, labels_in=labels_in
-        )
 
-        return df_undup_cbns_groupby
+    def get_union(self, groupby=None, len_set=None, labels_in=None):  # 获得指定条件的所有标签组合的并集
+        if groupby is None:
+            df_intersect = self.get_intersect()
+            df_union = get_union(df_intersect)
 
-    def get_dup_cbns(
-        self, change_index=False, len_set=None, labels_in=None
-    ):  # 获得指定条件的所有标签组合的并集
-        df_undup_cbns = self.get_undup_cbns()
-        df_dup_cbns = get_dup_cbns(df_undup_cbns)
+            df_union = refine(df=df_union, len_set=len_set, labels_in=labels_in,)
 
-        df_dup_cbns = refine(
-            df=df_dup_cbns,
-            len_set=len_set,
-            labels_in=labels_in,
-            change_index=change_index,
-        )
+            return df_union
+        else:
+            cols = self[groupby].unique()
 
-        return df_dup_cbns
+            for i, col in enumerate(cols):
+                df_union = get_union(
+                    get_intersect(self[self[groupby] == col], self.labels)
+                )["占比"]
+                if i == 0:
+                    df_union_groupby = df_union
+                else:
+                    df_union_groupby = pd.concat([df_union_groupby, df_union], axis=1)
+            df_union_groupby.columns = cols
 
-    def get_dup_cbns_groupby(
-        self, groupby, len_set=None, labels_in=None
-    ):  # 获得指定条件的所有标签组合的分组矩阵
-        cols = self[groupby].unique()
+            if groupby in D_SORTER:
+                try:
+                    df_union_groupby = df_union_groupby[D_SORTER[groupby]]  # 对于部分变量有固定列排序
+                except KeyError:
+                    pass
 
-        for i, col in enumerate(cols):
-            df_dup_cbns = get_dup_cbns(
-                get_undup_cbns(self[self[groupby] == col], self.labels)
-            )["占比"]
-            if i == 0:
-                df_dup_cbns_groupby = df_dup_cbns
-            else:
-                df_dup_cbns_groupby = pd.concat(
-                    [df_dup_cbns_groupby, df_dup_cbns], axis=1
-                )
-        df_dup_cbns_groupby.columns = cols
+            df_union_groupby = refine(
+                df=df_union_groupby, len_set=len_set, labels_in=labels_in
+            )
 
-        if groupby in D_SORTER:
-            try:
-                df_dup_cbns_groupby = df_dup_cbns_groupby[
-                    D_SORTER[groupby]
-                ]  # 对于部分变量有固定列排序
-            except KeyError:
-                pass
+            return df_union_groupby
 
-        df_dup_cbns_groupby = refine(
-            df=df_dup_cbns_groupby, len_set=len_set, labels_in=labels_in
-        )
-
-        return df_dup_cbns_groupby
-
-    def get_cbns_len(self):
-        df_undup_cbns = self.get_undup_cbns()
-        df_undup_cbns.reset_index(inplace=True)
-        df_undup_cbns["高血压合并症"] = df_undup_cbns["高血压合并症"].apply(
-            lambda x: len(tuple(x.split("+")))
-        )
-
-        df_cbns_len = df_undup_cbns.groupby(["高血压合并症"]).sum()
-
-        return df_cbns_len
-
-    def get_cbns_len_groupby(self, groupby):
-
-        cols = self[groupby].unique()
-
-        for i, col in enumerate(cols):
-            df_undup_cbns = get_undup_cbns(self[self[groupby] == col], self.labels)[
-                "占比"
-            ].to_frame()
-            df_undup_cbns.reset_index(inplace=True)
-            df_undup_cbns["高血压合并症"] = df_undup_cbns["高血压合并症"].apply(
+    def get_como_len(self, groupby=None):
+        if groupby is None:
+            df_intersect = self.get_intersect()
+            df_intersect.reset_index(inplace=True)
+            df_intersect["高血压合并症"] = df_intersect["高血压合并症"].apply(
                 lambda x: len(tuple(x.split("+")))
             )
-            df_cbns_len = df_undup_cbns.groupby(["高血压合并症"]).sum()
-            if i == 0:
-                df_cbns_len_groupby = df_cbns_len
-            else:
-                df_cbns_len_groupby = pd.concat(
-                    [df_cbns_len_groupby, df_cbns_len], axis=1
+
+            df_como_len = df_intersect.groupby(["高血压合并症"]).sum()
+
+            return df_como_len
+        else:
+            cols = self[groupby].unique()
+
+            for i, col in enumerate(cols):
+                df_intersect = get_intersect(self[self[groupby] == col], self.labels)[
+                    "占比"
+                ].to_frame()
+                df_intersect.reset_index(inplace=True)
+                df_intersect["高血压合并症"] = df_intersect["高血压合并症"].apply(
+                    lambda x: len(tuple(x.split("+")))
                 )
-        df_cbns_len_groupby.columns = cols
+                df_como_len = df_intersect.groupby(["高血压合并症"]).sum()
+                if i == 0:
+                    df_como_len_groupby = df_como_len
+                else:
+                    df_como_len_groupby = pd.concat(
+                        [df_como_len_groupby, df_como_len], axis=1
+                    )
+            df_como_len_groupby.columns = cols
 
-        if groupby in D_SORTER:
-            try:
-                df_cbns_len_groupby = df_cbns_len_groupby[
-                    D_SORTER[groupby]
-                ]  # 对于部分变量有固定列排序
-            except KeyError:
-                pass
+            if groupby in D_SORTER:
+                try:
+                    df_como_len_groupby = df_como_len_groupby[
+                        D_SORTER[groupby]
+                    ]  # 对于部分变量有固定列排序
+                except KeyError:
+                    pass
 
-        return df_cbns_len_groupby
+            return df_como_len_groupby
 
     def get_ss_venn(self, sets):
         all_ss = list(map(lambda x: "+".join(x), all_subsets(sets)))
-        ss = self.get_dup_cbns().loc[all_ss, "占比"]
+        ss = self.get_union().loc[all_ss, "占比"]
 
         if len(all_ss) == 7:
             ss111 = ss[6]
@@ -316,7 +289,7 @@ class Rx(pd.DataFrame):
         )
 
         plt.savefig(
-            "%s%s.png" % (self.savepath, "".join(set_labels)),
+            "%s%s%s.png" % (self.name, self.savepath, "".join(set_labels)),
             format="png",
             bbox_inches="tight",
             transparent=True,
@@ -324,7 +297,7 @@ class Rx(pd.DataFrame):
         )
 
     def plot_barh(self, groupby):
-        df = self.get_dup_cbns_groupby(groupby=groupby, len_set=1)
+        df = self.get_union_groupby(groupby=groupby, len_set=1)
         df.rename(index={"": "无相关适应症"}, inplace=True)
         labels = self.labels.copy()
         labels.append("无相关适应症")
@@ -336,8 +309,8 @@ class Rx(pd.DataFrame):
             formats=formats,
         )
 
-        df = self.get_dup_cbns_groupby(groupby=groupby, len_set=2, labels_in="高血压")
-        df_undup_htn = self.get_undup_cbns_groupby(
+        df = self.get_union_groupby(groupby=groupby, len_set=2, labels_in="高血压")
+        df_undup_htn = self.get_intersect_groupby(
             groupby=groupby, len_set=1, labels_in="高血压"
         )
         df_undup_htn.rename(index={"高血压": "单纯高血压"}, inplace=True)
@@ -356,7 +329,7 @@ class Rx(pd.DataFrame):
 
         plot_grid_barh(
             df=df,
-            savefile="%s%s高血压合并贡献占比.png" % (self.savepath, groupby),
+            savefile="%s%s%s高血压合并贡献占比.png" % (self.name, self.savepath, groupby),
             formats=formats,
         )
 
@@ -372,4 +345,5 @@ if __name__ == "__main__":
     r = Rx(df, name="门诊标准片数")
     filter = {"关注科室": ["心内科"]}
     # print(r.get_ss_venn(("高血压", "冠心病")))
-    r.plot_barh("关注科室")
+    # r.plot_barh("关注科室")
+    print(r.get_intersect(groupby="关注科室", len_set=2))
