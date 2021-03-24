@@ -26,6 +26,8 @@ def all_subsets(ss):
 
 
 def refine(df, len_set=None, labels_in=None):
+    df.dropna(axis=1, how="all", inplace=True)
+
     if len_set is not None:  # 返回指定标签数量的结果
         df = df[df.index.map(lambda x: x.count("+")) == len_set - 1]
 
@@ -107,14 +109,18 @@ class Rx(pd.DataFrame):
     ):  # 获得指定条件的所有标签组合（互不相交，加和=100%）
         if groupby is None:
             df_intersect = get_intersect(self, self.labels)
-            df_intersect = refine(df=df_intersect, len_set=len_set, labels_in=labels_in,)
-            
+            df_intersect = refine(
+                df=df_intersect, len_set=len_set, labels_in=labels_in,
+            )
+
             return df_intersect
         else:
             cols = self[groupby].unique()
 
             for i, col in enumerate(cols):
-                df_intersect = get_intersect(self[self[groupby] == col], self.labels)["占比"]
+                df_intersect = get_intersect(self[self[groupby] == col], self.labels)[
+                    "占比"
+                ]
                 if i == 0:
                     df_intersect_groupby = df_intersect
                 else:
@@ -125,9 +131,9 @@ class Rx(pd.DataFrame):
 
             if groupby in D_SORTER:
                 try:
-                    df_intersect_groupby = df_intersect_groupby[
-                        D_SORTER[groupby]
-                    ]  # 对于部分变量有固定列排序
+                    df_intersect_groupby = df_intersect_groupby.reindex(
+                        columns=D_SORTER[groupby]
+                    )  # 对于部分变量有固定列排序
                 except KeyError:
                     pass
 
@@ -136,7 +142,6 @@ class Rx(pd.DataFrame):
             )
 
             return df_intersect_groupby
-
 
     def get_union(self, groupby=None, len_set=None, labels_in=None):  # 获得指定条件的所有标签组合的并集
         if groupby is None:
@@ -161,7 +166,9 @@ class Rx(pd.DataFrame):
 
             if groupby in D_SORTER:
                 try:
-                    df_union_groupby = df_union_groupby[D_SORTER[groupby]]  # 对于部分变量有固定列排序
+                    df_union_groupby = df_union_groupby.reindex(
+                        columns=D_SORTER[groupby]
+                    )  # 对于部分变量有固定列排序
                 except KeyError:
                     pass
 
@@ -204,9 +211,9 @@ class Rx(pd.DataFrame):
 
             if groupby in D_SORTER:
                 try:
-                    df_como_len_groupby = df_como_len_groupby[
+                    df_como_len_groupby = df_como_len_groupby.reindex(
                         D_SORTER[groupby]
-                    ]  # 对于部分变量有固定列排序
+                    )  # 对于部分变量有固定列排序
                 except KeyError:
                     pass
 
@@ -335,9 +342,6 @@ class Rx(pd.DataFrame):
 
 
 if __name__ == "__main__":
-    import pandas as pd
-    import numpy as np
-
     df = pd.read_excel("./data.xlsx")
     mask = (df["原始诊断"] != "无诊断") & (df["统计项"] == "标准片数") & (df["来源"] == "门诊")
     df = df.loc[mask, :]
