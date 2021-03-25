@@ -3,10 +3,10 @@ import numpy as np
 from itertools import chain, combinations
 import matplotlib as mpl
 from matplotlib import pyplot as plt
-import numpy as np
 from matplotlib_venn import venn3, venn3_circles, venn2, venn2_circles
 import matplotlib.font_manager as fm
 from chart_func import plot_grid_barh
+from prince import CA
 
 
 # 设置matplotlib正常显示中文和负号
@@ -21,12 +21,12 @@ D_SORTER = {
 }
 
 
-def all_subsets(ss):
+def all_subsets(ss):  # 获取当前tuple包含元素所有可能的combinations
     return list(chain(*map(lambda x: combinations(ss, x), range(1, len(ss) + 1))))
 
 
 def refine(df, len_set=None, labels_in=None):
-    df.dropna(axis=1, how="all", inplace=True)
+    df.dropna(axis=1, how="all", inplace=True) # 删除所有行都为nan的列
 
     if len_set is not None:  # 返回指定标签数量的结果
         df = df[df.index.map(lambda x: x.count("+")) == len_set - 1]
@@ -34,12 +34,12 @@ def refine(df, len_set=None, labels_in=None):
     if labels_in is not None:  # 返回含有指定标签的结果
         df = df[df.index.map(lambda x: "高血压" in x) == True]
 
-    if "占比" in df.columns:
+    if "占比" in df.columns: # 排序
         df.sort_values(by="占比", ascending=False, inplace=True)
     else:
         df.sort_values(df.columns[0], ascending=False, inplace=True)
 
-    df.fillna(0, inplace=True)
+    df.fillna(0, inplace=True) # 剩余的nan更新为0
 
     return df
 
@@ -58,11 +58,13 @@ def get_intersect(df, labels):
     return df_intersect
 
 
-def get_union(df):
-    df.reset_index(inplace=True)
-    df["高血压合并症"] = df["高血压合并症"].apply(lambda x: all_subsets(tuple(x.split("+"))))
+def get_union(df_intersect):
+    df_intersect.reset_index(inplace=True)
+    df_intersect["高血压合并症"] = df_intersect["高血压合并症"].apply(
+        lambda x: all_subsets(tuple(x.split("+")))
+    )
 
-    df_union = df.explode("高血压合并症").groupby("高血压合并症").sum()
+    df_union = df_intersect.explode("高血压合并症").groupby("高血压合并症").sum()
     df_union.index = df_union.index.map(
         lambda x: "+".join(x) if type(x) is tuple else x
     )
@@ -105,7 +107,7 @@ class Rx(pd.DataFrame):
         self.labels = labels
 
     def get_intersect(
-        self, groupby=None, len_set=None, labels_in=None
+        self, groupby=None, groupby_metric="占比", len_set=None, labels_in=None
     ):  # 获得指定条件的所有标签组合（互不相交，加和=100%）
         if groupby is None:
             df_intersect = get_intersect(self, self.labels)
@@ -119,7 +121,7 @@ class Rx(pd.DataFrame):
 
             for i, col in enumerate(cols):
                 df_intersect = get_intersect(self[self[groupby] == col], self.labels)[
-                    "占比"
+                    groupby_metric
                 ]
                 if i == 0:
                     df_intersect_groupby = df_intersect
@@ -143,7 +145,9 @@ class Rx(pd.DataFrame):
 
             return df_intersect_groupby
 
-    def get_union(self, groupby=None, len_set=None, labels_in=None):  # 获得指定条件的所有标签组合的并集
+    def get_union(
+        self, groupby=None, groupby_metric="占比", len_set=None, labels_in=None
+    ):  # 获得指定条件的所有标签组合的并集
         if groupby is None:
             df_intersect = self.get_intersect()
             df_union = get_union(df_intersect)
@@ -157,7 +161,7 @@ class Rx(pd.DataFrame):
             for i, col in enumerate(cols):
                 df_union = get_union(
                     get_intersect(self[self[groupby] == col], self.labels)
-                )["占比"]
+                )[groupby_metric]
                 if i == 0:
                     df_union_groupby = df_union
                 else:
@@ -296,7 +300,7 @@ class Rx(pd.DataFrame):
         )
 
         plt.savefig(
-            "%s%s%s.png" % (self.name, self.savepath, "".join(set_labels)),
+            "%s%s%s.png" % (self.savepath, self.name, "".join(set_labels)),
             format="png",
             bbox_inches="tight",
             transparent=True,
@@ -304,7 +308,7 @@ class Rx(pd.DataFrame):
         )
 
     def plot_barh(self, groupby):
-        df = self.get_union_groupby(groupby=groupby, len_set=1)
+        df = self.get_union(groupby=groupby, len_set=1)
         df.rename(index={"": "无相关适应症"}, inplace=True)
         labels = self.labels.copy()
         labels.append("无相关适应症")
@@ -316,8 +320,8 @@ class Rx(pd.DataFrame):
             formats=formats,
         )
 
-        df = self.get_union_groupby(groupby=groupby, len_set=2, labels_in="高血压")
-        df_undup_htn = self.get_intersect_groupby(
+        df = self.get_union(groupby=groupby, len_set=2, labels_in="高血压")
+        df_undup_htn = self.get_intersect(
             groupby=groupby, len_set=1, labels_in="高血压"
         )
         df_undup_htn.rename(index={"高血压": "单纯高血压"}, inplace=True)
@@ -336,10 +340,26 @@ class Rx(pd.DataFrame):
 
         plot_grid_barh(
             df=df,
-            savefile="%s%s%s高血压合并贡献占比.png" % (self.name, self.savepath, groupby),
+            savefile="%s%s%s高血压合并贡献占比.png" % (self.savepath, self.name, groupby),
             formats=formats,
         )
 
+    def plot_ca(self, groupby, len_set=None, labels_in=None):
+        ca = CA(n_components=2,n_iter=3,random_state=101 )
+        df = self.get_union(groupby=groupby, len_set=len_set, labels_in=labels_in)
+
+        ca.fit(df)
+
+        ax = ca.plot_coordinates(X = df, figsize = (20,8))
+        ax.get_legend().remove()
+        
+        plt.savefig(
+            "%s%s%s对应分析图.png" % (self.savepath, self.name, groupby),
+            format="png",
+            bbox_inches="tight",
+            transparent=True,
+            dpi=600,
+        )
 
 if __name__ == "__main__":
     df = pd.read_excel("./data.xlsx")
@@ -350,4 +370,5 @@ if __name__ == "__main__":
     filter = {"关注科室": ["心内科"]}
     # print(r.get_ss_venn(("高血压", "冠心病")))
     # r.plot_barh("关注科室")
-    print(r.get_intersect(groupby="关注科室", len_set=2))
+    # print(r.get_union(groupby="关注科室", len_set=2))
+    r.plot_ca("关注科室")
