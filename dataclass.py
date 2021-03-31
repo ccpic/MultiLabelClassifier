@@ -26,7 +26,7 @@ def all_subsets(ss):  # 获取当前tuple包含元素所有可能的combinations
 
 
 def refine(df, len_set=None, labels_in=None):
-    df.dropna(axis=1, how="all", inplace=True) # 删除所有行都为nan的列
+    df.dropna(axis=1, how="all", inplace=True)  # 删除所有行都为nan的列
 
     if len_set is not None:  # 返回指定标签数量的结果
         df = df[df.index.map(lambda x: x.count("+")) == len_set - 1]
@@ -34,12 +34,12 @@ def refine(df, len_set=None, labels_in=None):
     if labels_in is not None:  # 返回含有指定标签的结果
         df = df[df.index.map(lambda x: "高血压" in x) == True]
 
-    if "占比" in df.columns: # 排序
+    if "占比" in df.columns:  # 排序
         df.sort_values(by="占比", ascending=False, inplace=True)
     else:
         df.sort_values(df.columns[0], ascending=False, inplace=True)
 
-    df.fillna(0, inplace=True) # 剩余的nan更新为0
+    df.fillna(0, inplace=True)  # 剩余的nan更新为0
 
     return df
 
@@ -294,6 +294,7 @@ class Rx(pd.DataFrame):
         # plt.annotate('无合并\n%s%s的\n%s患者' % (set_labels[1], set_labels[2], set_labels[0]), xy=v.get_label_by_id('100').get_position() - np.array([0, 0.05]), xytext=(-70,-70),
         #             ha='center', textcoords='offset points', bbox=dict(boxstyle='round,pad=0.5', fc='gray', alpha=0.1),
         #             arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.5',color='gray'))
+
         plt.title(
             "%s\n\n总体%s" % ("/".join(set_labels), "{:.1%}".format(sum(subsets))),
             fontsize=18,
@@ -321,9 +322,7 @@ class Rx(pd.DataFrame):
         )
 
         df = self.get_union(groupby=groupby, len_set=2, labels_in="高血压")
-        df_undup_htn = self.get_intersect(
-            groupby=groupby, len_set=1, labels_in="高血压"
-        )
+        df_undup_htn = self.get_intersect(groupby=groupby, len_set=1, labels_in="高血压")
         df_undup_htn.rename(index={"高血压": "单纯高血压"}, inplace=True)
         df = pd.concat([df_undup_htn, df], axis=0)
         labels = [
@@ -345,14 +344,14 @@ class Rx(pd.DataFrame):
         )
 
     def plot_ca(self, groupby, len_set=None, labels_in=None):
-        ca = CA(n_components=2,n_iter=3,random_state=101 )
+        ca = CA(n_components=2, n_iter=3, random_state=101)
         df = self.get_union(groupby=groupby, len_set=len_set, labels_in=labels_in)
 
         ca.fit(df)
 
-        ax = ca.plot_coordinates(X = df, figsize = (20,8))
+        ax = ca.plot_coordinates(X=df, figsize=(20, 8))
         ax.get_legend().remove()
-        
+
         plt.savefig(
             "%s%s%s对应分析图.png" % (self.savepath, self.name, groupby),
             format="png",
@@ -361,13 +360,14 @@ class Rx(pd.DataFrame):
             dpi=600,
         )
 
+
 if __name__ == "__main__":
     df = pd.read_excel("./data.xlsx")
     mask = (df["原始诊断"] != "无诊断") & (df["统计项"] == "标准片数") & (df["来源"] == "门诊")
     df = df.loc[mask, :]
 
     r = Rx(df, name="门诊标准片数")
-    filter = {"关注科室": ["心内科"]}
+
     # print(r.get_ss_venn(("高血压", "冠心病")))
     # r.plot_barh("关注科室")
     # print(r.get_union(groupby="关注科室", len_set=2))
