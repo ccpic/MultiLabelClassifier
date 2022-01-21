@@ -194,10 +194,15 @@ def plot_grid_barh(
             )
 
         max_v = df_bar.values.max()
+        min_v = df_bar.values.max()
         for j, v in enumerate(df_bar.values):
-            if v < max_v * 0.2:
+            if 0 < v < max_v * 0.2:
                 pos_x = v * 1.1
                 ha = "left"
+                fontcolor = COLOR_LIST[i]
+            elif min_v * 0.2 < v < 0:
+                pos_x = v * 0.9
+                ha = "right"
                 fontcolor = COLOR_LIST[i]
             else:
                 pos_x = v / 2
