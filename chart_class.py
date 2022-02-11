@@ -25,10 +25,13 @@ mpl.rcParams["hatch.linewidth"] = 0.5
 mpl.rcParams["hatch.color"] = "grey"
 
 # sns.set_theme(style="whitegrid")
-MYFONT = fm.FontProperties(fname="C:/Windows/Fonts/msyh.ttc")
+MYFONT = fm.FontProperties(fname="C:/Windows/Fonts/SimHei.ttf")
 NUM_FONT = {"fontname": "Calibri"}
 
 COLOR_DICT = {
+    "ARB" : "#44546A",
+    "ACEI": "#6F8DB9",
+    "ARNI": "#BD2843",
     "缬沙坦": "#44546A",
     "厄贝沙坦": "#6F8DB9",
     "氯沙坦": "#BD2843",
@@ -38,6 +41,7 @@ COLOR_DICT = {
     "阿利沙坦酯": "Deepskyblue",
     "培哚普利": "Saddlebrown",
     "贝那普利": "Purple",
+    "沙库巴曲缬沙坦钠": "Olive",
     "高血压": "#44546A",
     "冠心病": "#6F8DB9",
     "糖尿病": "#ED94B6",
@@ -582,6 +586,8 @@ class GridFigure(Figure):
             if "ytitle" in self.style:
                 self.supylabel(self.style["ytitle"])
 
+            ylim_range = []
+            xlim_range = []
             for i, ax in enumerate(self.axes):
                 ax.tick_params(axis="x", labelsize=self.fontsize)  # 设置x轴刻度标签字体大小
                 ax.tick_params(axis="y", labelsize=self.fontsize)  # 设置x轴刻度标签字体大小
@@ -671,7 +677,30 @@ class GridFigure(Figure):
                         pass
                     if ax2 is not None:
                         ax2.set_ylim(self.style["ylim"][i][0], self.style["ylim"][i][1])
-
+                if "same_ylim" in self.style:
+                    if self.style["same_ylim"]:
+                        ylim_min, ylim_max = ax.get_ylim()
+                        if i == 0:
+                            ylim_range = [ylim_min, ylim_max]
+                        else:
+                            if ylim_min > ylim_range[0]:
+                                ax.set_ylim(bottom=ylim_range[0])
+                            else:
+                                ylim_range = [ylim_min, ylim_range[1]]
+                            if ylim_max < ylim_range[1]:
+                                ax.set_ylim(top=ylim_range[1])
+                            else:
+                                ylim_range = [ylim_range[0], ylim_max]
+                if "same_xlim" in self.style:
+                    if self.style["same_xlim"]:
+                        xlim_min, xlim_max = ax.get_xlim()
+                        if i == 0:
+                            xlim_range = [xlim_min, xlim_max]
+                        else:
+                            if xlim_min < xlim_range[0]:
+                                xlim_range = [xlim_min, xlim_range[1]]
+                            if xlim_max > xlim_range[1]:
+                                xlim_range = [xlim_range[0], xlim_max]
                 # # 次坐标y轴显示lim
                 # if "y2lim" in self.style:
                 #     ax2 = ax.get_shared_x_axes().get_siblings(ax)[0]
@@ -697,7 +726,15 @@ class GridFigure(Figure):
                         linestyle=":",
                         linewidth=0.2,
                     )
-
+            if "same_xlim" in self.style:
+                if self.style["same_xlim"]:
+                    for i, ax in enumerate(self.axes):
+                        ax.set_xlim(xlim_range[0],xlim_range[1])
+            if "same_ylim" in self.style:
+                if self.style["same_ylim"]:
+                    for i, ax in enumerate(self.axes):
+                        ax.set_xlim(ylim_range[0],ylim_range[1])
+                        
     def save(self):
 
         # 设置一些基本格式
@@ -972,35 +1009,38 @@ class PlotStripDot(GridFigure):
         for j, ax in enumerate(self.axes):
             df = self.data[j]
             index_range = range(1, len(df.index) + 1)
+            if isinstance(df, pd.DataFrame):
+                xmin = df.iloc[:, 0]
+                xmax = df.iloc[:, 1]
+                label_min = df.columns[0]
+                label_max = df.columns[1]
+            elif isinstance(df, pd.Series):
+                xmin = [0 for i in index_range]
+                xmax = df
+                label_min = df.name
+                label_max = df.name
             ax.hlines(
-                y=index_range,
-                xmin=df.iloc[:, 0],
-                xmax=df.iloc[:, 1],
-                color="grey",
-                alpha=0.3,
+                y=index_range, xmin=xmin, xmax=xmax, color="grey", alpha=0.3,
             )  # 连接线
+            if isinstance(df, pd.DataFrame):
+                ax.scatter(
+                    xmin, index_range, color="grey", alpha=0.3, label=label_min,
+                )  # 起始端点
             ax.scatter(
-                df.iloc[:, 0],
-                index_range,
-                color="grey",
-                alpha=0.3,
-                label=df.columns[0],
-            )  # 起始端点
-            ax.scatter(
-                df.iloc[:, 1],
-                index_range,
-                color=COLOR_LIST[j],
-                alpha=0.4,
-                label=df.columns[1],
+                xmax, index_range, color=COLOR_LIST[j], alpha=0.4, label=label_max,
             )  # 结束端点
 
             # 添加最新时点的数据标签
             text_gap = (ax.get_xlim()[1] - ax.get_xlim()[0]) / 50
             for i in index_range:
+                if isinstance(df, pd.DataFrame):
+                    v = df.iloc[i - 1, 1]
+                elif isinstance(df, pd.Series):
+                    v = df.iloc[i - 1]
                 ax.text(
-                    df.iloc[i - 1, 1] + text_gap,
+                    v + text_gap,
                     i,
-                    self.fmt[j].format(df.iloc[i - 1, 1]),
+                    self.fmt[j].format(v),
                     ha="left",
                     va="center",
                     color=COLOR_LIST[j],
@@ -1075,15 +1115,16 @@ class PlotStripDot(GridFigure):
             ax.invert_yaxis()  # 翻转y轴，最上方显示排名靠前的序列
 
             # 图例
-            ax.legend(
-                # df.columns,
-                loc="lower right",
-                # ncol=4,
-                # bbox_to_anchor=(0.5, -0.1),
-                # labelspacing=1,
-                # frameon=False,
-                prop={"family": "SimHei", "size": self.fontsize},
-            )
+            if isinstance(df, pd.DataFrame):
+                ax.legend(
+                    # df.columns,
+                    loc="lower right",
+                    # ncol=4,
+                    # bbox_to_anchor=(0.5, -0.1),
+                    # labelspacing=1,
+                    # frameon=False,
+                    prop={"family": "SimHei", "size": self.fontsize},
+                )
 
         return self.save()
 

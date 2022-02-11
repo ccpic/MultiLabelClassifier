@@ -13,6 +13,10 @@ from chart_class import (
 )
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+import jieba
+import re
+from collections import Counter
+from wordcloud import WordCloud
 
 D_MAP_MAT = {
     "19Q4": "MAT20Q3",
@@ -25,22 +29,34 @@ D_MAP_MAT = {
     "21Q3": "MAT21Q3",
 }
 
-
+D_MAP_GATEGORY = {
+    "缬沙坦": "ARB",
+    "厄贝沙坦": "ARB",
+    "氯沙坦": "ARB",
+    "替米沙坦": "ARB",
+    "坎地沙坦": "ARB",
+    "奥美沙坦酯": "ARB",
+    "阿利沙坦酯": "ARB",
+    "培哚普利": "ACEI",
+    "贝那普利": "ACEI",
+    "沙库巴曲缬沙坦钠": "ARNI",
+}
 # def cal_ylim(df:pd.DataFrame, scale_to:float=0.1):
 #     v_max = df.max()
 #     v_min = df.min()
 
 if __name__ == "__main__":
-    df = pd.read_excel("./普瑞快思-2021Q3_test3.xlsx", engine="openpyxl", sheet_name="标准片数")
+    df = pd.read_excel("./普瑞快思-2021Q3.xlsx", engine="openpyxl", sheet_name="标准片数")
     df["MAT"] = df["日期"].map(D_MAP_MAT)
-    mask = (df["原始诊断"] != "无诊断") & (df["统计项"] == "标准片数") & (df["来源"] == "门诊")
-    mask = mask & (df["通用名"] != "沙库巴曲缬沙坦钠")
-    # & (df["关注科室"].isin(["心内科"]))
+    df["品类"] = df["通用名"].map(D_MAP_GATEGORY)
+    mask = (df["原始诊断"] != "无诊断") & (df["统计项"] == "标准片数") & (df["来源"] == "病房")
+    # mask = mask & (df["通用名"] == "沙库巴曲缬沙坦钠")
+    # mask = mask & (df["关注科室"].isin(["肾内科"]))
     df2 = df.loc[mask, :]
-    print(df2.columns, df2["MAT"].unique())
-    r = Rx(df2, name="RAAS平片处方 - 门诊 - 标准片数")
-    r_pre = Rx(df2[df2["MAT"] == "MAT20Q3"], name="RAAS平片处方 - 门诊 - 标准片数 - 20Q3")
-    r_post = Rx(df2[df2["MAT"] == "MAT21Q3"], name="RAAS平片处方 - 门诊 - 标准片数 - 21Q3")
+    print(df2)
+    r = Rx(df2, name="RAAS平片 vs. ARNI - 病房 - 标准片数")
+    r_pre = Rx(df2[df2["MAT"] == "MAT20Q3"], name="RAAS平片 vs. ARNI - 病房 - 标准片数 - 20Q3")
+    r_post = Rx(df2[df2["MAT"] == "MAT21Q3"], name="RAAS平片 vs. ARNI - 病房 - 标准片数 - 21Q3")
 
     # df3 = r.get_union(groupby="日期", len_set=1, sort_values=False).transpose()
     # df3.drop("", axis=1, inplace=True)
@@ -94,5 +110,31 @@ if __name__ == "__main__":
     #         .reindex_like(df_post[col].to_frame())
     #     )
     #     gs_title.append(col)
+    
 
+    df3 = r_post.get_intersect("品类")
+    df3.drop([""], axis=0, inplace=True)
 
+    plot_data = []
+    gs_title = []
+    for col in df3:
+        plot_data.append(df3.loc[:, col].sort_values(ascending=False).head(20))
+        gs_title.append(col)
+    
+    fmt = [".1%"] * df3.shape[1]
+    title = f"{r_post.name} - 具体合并症组合贡献占比 - Top20"
+    gs = GridSpec(1, 3, wspace=1)
+
+    f = plt.figure(
+        FigureClass=PlotStripDot,
+        width=15,
+        height=6,
+        fmt=fmt,
+        gs=gs,
+        data=plot_data,
+        fontsize=10,
+        style={"title": title, "gs_title": gs_title, "remove_xticks": True},
+    )
+    f.plot()
+    
+    # r.plot_group_barh("品类", same_xlim=True)

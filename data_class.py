@@ -14,6 +14,12 @@ from chart_class import PlotLine, PlotStackedBar, PlotStripDot, PlotHorizontalBa
 from prince import CA
 from statsmodels.stats.proportion import proportions_ztest
 from typing import Union
+import jieba
+import re
+from collections import Counter
+from wordcloud import WordCloud
+import os
+
 
 # 设置matplotlib正常显示中文和负号
 mpl.rcParams["font.sans-serif"] = ["SimHei"]  # 用黑体显示中文
@@ -621,7 +627,7 @@ class Rx(pd.DataFrame):
             dpi=600,
         )
 
-    def plot_group_barh(self, groupby: str, diffby: str = None):
+    def plot_group_barh(self, groupby: str, diffby: str = None, same_xlim:bool = False):
         df = self.get_undup_all(groupby=groupby, diffby=diffby)
 
         plot_data = []
@@ -654,6 +660,7 @@ class Rx(pd.DataFrame):
                 "gs_title": gs_title,
                 "remove_xticks": True,
                 "first_yticks_only": True,
+                "same_xlim":same_xlim,
             },
         )
 
@@ -685,10 +692,64 @@ class Rx(pd.DataFrame):
                 "gs_title": gs_title,
                 "remove_xticks": True,
                 "first_yticks_only": True,
+                "same_xlim":same_xlim,
             },
         )
 
         f.plot(threshold=threshold)
+
+    def wordcloud(self):
+        jieba.load_userdict("./dict.txt")
+
+        cut_words = ""
+        text = self["原始诊断"]
+        for index, value in text.items():
+            line = str(value).strip("\n")
+            seg_list = jieba.cut(line, cut_all=False)
+            cut_words += " ".join(seg_list)
+
+        all_words = cut_words.split()
+        c = Counter()
+        for x in all_words:
+            if len(x) > 1 and x != "\r\n":
+                c[x] += 1
+
+        d_words = {}
+        print("\n词频统计结果：")
+        for (k, v) in c.most_common(100):  # 输出词频最高的前两个词
+            print("%s:%d" % (k, v))
+            d_words[k] = v
+        # 产生一个以(150,150)为圆心,半径为130的圆形mask
+        x, y = np.ogrid[:600, :600]
+        mask = (x - 300) ** 2 + (y - 300) ** 2 > 260 ** 2
+        mask = 255 * mask.astype(int)
+        wordcloud = WordCloud(
+            width=800,
+            height=800,
+            font_path="C:/Windows/Fonts/SimHei.ttf",
+            background_color="white",
+            mask=mask,
+        )
+        wordcloud.generate_from_frequencies(frequencies=d_words)
+
+        plt.figure(figsize=(10,10))
+        plt.imshow(wordcloud, interpolation="bilinear")
+        plt.axis("off")
+
+        # 保存
+        if os.path.exists(self.savepath) is False:
+            os.makedirs(self.savepath)
+
+        path = f"{self.savepath}{self.name}词云.png"
+        plt.savefig(
+            path, format="png", bbox_inches="tight", transparent=True, dpi=600,
+        )
+        print(path + " has been saved...")
+
+        # Close
+        plt.clf()
+        plt.cla()
+        plt.close()
 
 
 if __name__ == "__main__":
