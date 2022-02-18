@@ -10,7 +10,13 @@ from matplotlib.gridspec import GridSpec
 from matplotlib_venn import venn3, venn3_circles, venn2, venn2_circles
 import matplotlib.font_manager as fm
 from chart_func import plot_grid_barh
-from chart_class import PlotLine, PlotStackedBar, PlotStripDot, PlotHorizontalBar
+from chart_class import (
+    PlotLine,
+    PlotStackedBar,
+    PlotStripDot,
+    PlotHorizontalBar,
+    PlotPie,
+)
 from prince import CA
 from statsmodels.stats.proportion import proportions_ztest
 from typing import Union
@@ -154,6 +160,21 @@ def z_test(df: pd.DataFrame) -> pd.DataFrame:
         df_sig.rename(columns={col: col + labels[j]}, inplace=True)  # 列名加上字母标签
 
     return df_sig.fillna("")
+
+
+def get_daily_dose(df: pd.DataFrame) -> tuple:
+    df = df.groupby("日治疗剂量").agg({"统计值": sum,})
+    df2 = df.copy()
+    df2.loc["其他"] = df2.reindex(index=["50MG", "150MG", "300MG", "400MG"]).sum()
+    df2 = df2.reindex(index=["100MG", "200MG", "其他"])
+
+    df = df.reset_index()
+    print(df)
+    df["日治疗剂量"] = df["日治疗剂量"].str[:-2].astype(int)
+    add = (df["日治疗剂量"] * df["统计值"]).sum() / df["统计值"].sum()
+    print(add)
+
+    return df2, add
 
 
 class Rx(pd.DataFrame):
@@ -450,6 +471,35 @@ class Rx(pd.DataFrame):
 
             return df_como_len_groupby
 
+    def plot_add(self, query_filters: list = ["1 == 1"]):
+        title = "诺欣妥平均日治疗剂量"
+        gs = GridSpec(1, len(query_filters), wspace=0)
+        plot_data = []
+        gs_title = []
+        donut_title = []
+        fmt = []
+        for query_str in query_filters:
+            df = self.query(query_str)
+            rx_numbers = "{:,.0f}".format(df.shape[0])
+            df2, add = get_daily_dose(df)
+            add = "{:,.0f}".format(add)
+            plot_data.append(df2)
+            gs_title.append(query_str)
+            fmt.append(",.0%")
+            donut_title.append(f"ADD: {add}MG\n\n处方张数: {rx_numbers}")
+
+        f = plt.figure(
+            FigureClass=PlotPie,
+            width=16,
+            height=5,
+            gs=gs,
+            fmt=fmt,
+            data=plot_data,
+            fontsize=12,
+            style={"title": title, "gs_title": gs_title},
+        )
+        f.plot(donut_title=donut_title)
+
     def plot_como_len(self, groupby=None):
         df = self.get_como_len(groupby=groupby)
         df = df.reindex(index=[1, 2, 3, 4, 5, 6, 7, "无相关适应症"])
@@ -627,7 +677,9 @@ class Rx(pd.DataFrame):
             dpi=600,
         )
 
-    def plot_group_barh(self, groupby: str, diffby: str = None, same_xlim:bool = False):
+    def plot_group_barh(
+        self, groupby: str, diffby: str = None, same_xlim: bool = False
+    ):
         df = self.get_undup_all(groupby=groupby, diffby=diffby)
 
         plot_data = []
@@ -660,7 +712,7 @@ class Rx(pd.DataFrame):
                 "gs_title": gs_title,
                 "remove_xticks": True,
                 "first_yticks_only": True,
-                "same_xlim":same_xlim,
+                "same_xlim": same_xlim,
             },
         )
 
@@ -692,7 +744,7 @@ class Rx(pd.DataFrame):
                 "gs_title": gs_title,
                 "remove_xticks": True,
                 "first_yticks_only": True,
-                "same_xlim":same_xlim,
+                "same_xlim": same_xlim,
             },
         )
 
@@ -732,7 +784,7 @@ class Rx(pd.DataFrame):
         )
         wordcloud.generate_from_frequencies(frequencies=d_words)
 
-        plt.figure(figsize=(10,10))
+        plt.figure(figsize=(10, 10))
         plt.imshow(wordcloud, interpolation="bilinear")
         plt.axis("off")
 

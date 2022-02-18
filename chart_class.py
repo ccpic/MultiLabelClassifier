@@ -29,7 +29,7 @@ MYFONT = fm.FontProperties(fname="C:/Windows/Fonts/SimHei.ttf")
 NUM_FONT = {"fontname": "Calibri"}
 
 COLOR_DICT = {
-    "ARB" : "#44546A",
+    "ARB": "#44546A",
     "ACEI": "#6F8DB9",
     "ARNI": "#BD2843",
     "缬沙坦": "#44546A",
@@ -729,12 +729,12 @@ class GridFigure(Figure):
             if "same_xlim" in self.style:
                 if self.style["same_xlim"]:
                     for i, ax in enumerate(self.axes):
-                        ax.set_xlim(xlim_range[0],xlim_range[1])
+                        ax.set_xlim(xlim_range[0], xlim_range[1])
             if "same_ylim" in self.style:
                 if self.style["same_ylim"]:
                     for i, ax in enumerate(self.axes):
-                        ax.set_xlim(ylim_range[0],ylim_range[1])
-                        
+                        ax.set_xlim(ylim_range[0], ylim_range[1])
+
     def save(self):
 
         # 设置一些基本格式
@@ -765,7 +765,7 @@ class GridFigure(Figure):
 
 # 继承基本类，饼图类
 class PlotPie(GridFigure):
-    def plot(self, donut: bool = True, donut_title: str = ""):
+    def plot(self, donut: bool = True, donut_title: list = [""]):
         for j, ax in enumerate(self.axes):
             df = self.data[j]
 
@@ -784,7 +784,7 @@ class PlotPie(GridFigure):
                 autopct="%1.1f%%",
                 pctdistance=0.85,
                 wedgeprops={"linewidth": 3, "edgecolor": "white"},
-                textprops={"family": "Simhei"},
+                textprops={"family": "Simhei", "fontsize": self.fontsize},
             )
 
             for i, pie_wedge in enumerate(wedges):
@@ -801,7 +801,7 @@ class PlotPie(GridFigure):
 
             for k, autotext in enumerate(autotexts):
                 autotext.set_color("white")
-                autotext.set_fontsize(10)
+                autotext.set_fontsize(self.fontsize)
                 autotext.set_text(self.fmt[j].format(df.iloc[k, 0]))
                 if df.iloc[k, 0] < 0:
                     autotext.set_color("r")
@@ -810,7 +810,7 @@ class PlotPie(GridFigure):
                 ax.text(
                     0,
                     0,
-                    donut_title,
+                    donut_title[j],
                     horizontalalignment="center",
                     verticalalignment="center",
                     size=self.fontsize,
